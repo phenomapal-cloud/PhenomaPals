@@ -9,7 +9,8 @@ import {
   doc,
   updateDoc,
   serverTimestamp,
-  writeBatch
+  writeBatch,
+  onSnapshot
 } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -40,6 +41,14 @@ let isLoggingIn = false;
 let isClearingLogs = false;
 let popupResolver = null;
 let popupQueue = Promise.resolve();
+let realtimeUnsubscribers = [];
+let realtimeActive = false;
+let realtimeStarted = false;
+let realtimeReady = {
+  teachers: false,
+  students: false,
+  logs: false
+};
 
 function createPopupSystem() {
   if (document.getElementById("customPopupOverlay")) return;
@@ -137,6 +146,11 @@ function createPopupSystem() {
 
     #customPopupCancel:hover {
       background: #dce4ef;
+    }
+
+    #customPopupActions button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
 
     @keyframes phenomapalsPopupIn {
@@ -318,24 +332,6 @@ function showConfirm(message, title = "Confirm Action") {
   });
 }
 
-function showLegacyAlert(message) {
-  const text = String(message);
-
-  let type = "info";
-
-  if (/successfully|saved successfully|updated successfully/i.test(text)) {
-    type = "success";
-  } else if (/unable|failed|error|could not|cannot/i.test(text)) {
-    type = "error";
-  } else if (
-    /please|already used|not found|no activity logs|no records/i.test(text)
-  ) {
-    type = "warning";
-  }
-
-  return showMessage(text, type);
-}
-
 function getStudentStartingAttributes() {
   return {
     level: 0,
@@ -376,6 +372,95 @@ async function loadCollection(collectionRef) {
     ...item.data(),
     docId: item.id
   }));
+}
+
+function startRealtimeListeners() {
+  if (realtimeActive) return;
+
+  realtimeActive = true;
+  realtimeStarted = true;
+
+  realtimeReady = {
+    teachers: false,
+    students: false,
+    logs: false
+  };
+
+  const handleError = (collectionName, error) => {
+    console.error(
+      `Real-time ${collectionName} listener error:`,
+      error
+    );
+
+    void showMessage(
+      `Unable to receive live updates for ${collectionName}. Please check your internet connection and Firestore Security Rules.`,
+      "error"
+    );
+  };
+
+  const unsubscribeTeachers = onSnapshot(
+    teachersCollection,
+    snapshot => {
+      teachers = snapshot.docs.map(item => ({
+        ...item.data(),
+        docId: item.id
+      }));
+
+      realtimeReady.teachers = true;
+      updateUI();
+    },
+    error => handleError("teachers", error)
+  );
+
+  const unsubscribeStudents = onSnapshot(
+    studentsCollection,
+    snapshot => {
+      students = snapshot.docs.map(item => ({
+        ...item.data(),
+        docId: item.id
+      }));
+
+      realtimeReady.students = true;
+      updateUI();
+    },
+    error => handleError("students", error)
+  );
+
+  const unsubscribeLogs = onSnapshot(
+    logsCollection,
+    snapshot => {
+      logs = snapshot.docs.map(item => ({
+        ...item.data(),
+        docId: item.id
+      }));
+
+      realtimeReady.logs = true;
+      renderLogs();
+    },
+    error => handleError("activityLogs", error)
+  );
+
+  realtimeUnsubscribers = [
+    unsubscribeTeachers,
+    unsubscribeStudents,
+    unsubscribeLogs
+  ];
+
+  console.log("Firestore real-time listeners started.");
+}
+
+function stopRealtimeListeners() {
+  realtimeUnsubscribers.forEach(unsubscribe => unsubscribe());
+
+  realtimeUnsubscribers = [];
+  realtimeActive = false;
+  realtimeReady = {
+    teachers: false,
+    students: false,
+    logs: false
+  };
+
+  console.log("Firestore real-time listeners stopped.");
 }
 
 async function isAccountIdTaken(
@@ -422,6 +507,8 @@ async function isAccountIdTaken(
 }
 
 async function loadAllData() {
+  if (realtimeActive) return true;
+
   try {
     const [newTeachers, newStudents, newLogs] = await Promise.all([
       loadCollection(teachersCollection),
@@ -457,11 +544,6 @@ async function addLog(message) {
       time: new Date().toLocaleString("en-US"),
       createdAt: serverTimestamp()
     });
-
-    if (isClearingLogs) return;
-
-    logs = await loadCollection(logsCollection);
-    renderLogs();
   } catch (error) {
     console.error("Activity log error:", error);
   }
@@ -473,10 +555,11 @@ function renderLogs() {
 
   container.replaceChildren();
 
-  const sortedLogs = [...logs].sort((a, b) =>
-    (b.createdAt?.seconds || 0) -
-    (a.createdAt?.seconds || 0)
-  );
+  const sortedLogs = [...logs].sort((a, b) => {
+    const timeA = a.createdAt?.seconds || 0;
+    const timeB = b.createdAt?.seconds || 0;
+    return timeB - timeA;
+  });
 
   if (!sortedLogs.length) {
     container.textContent = "No activity logs available.";
@@ -514,19 +597,14 @@ async function clearLogs() {
     const snapshot = await getDocs(logsCollection);
 
     if (snapshot.empty) {
-      logs = [];
-      renderLogs();
-
       void showMessage(
         "There are no activity logs to clear.",
         "warning"
       );
-
       return;
     }
 
     const documents = snapshot.docs;
-    let deletedCount = 0;
 
     for (let i = 0; i < documents.length; i += 500) {
       const batch = writeBatch(db);
@@ -537,15 +615,7 @@ async function clearLogs() {
       });
 
       await batch.commit();
-      deletedCount += chunk.length;
     }
-
-    logs = [];
-    renderLogs();
-
-    console.log(
-      `${deletedCount} activity log(s) deleted from Firestore.`
-    );
 
     void showMessage(
       "All activity logs have been permanently deleted.",
@@ -554,7 +624,9 @@ async function clearLogs() {
   } catch (error) {
     console.error("Clear logs error:", error);
 
-    await loadAllData();
+    if (!realtimeActive) {
+      await loadAllData();
+    }
 
     void showMessage(
       "Unable to clear activity logs. Please check your Firestore permissions and try again.",
@@ -586,7 +658,7 @@ async function addTeacher(name, id, pass) {
 
     await addLog(`Teacher added successfully: ${name}`);
 
-    if (!await loadAllData()) {
+    if (!realtimeActive && !await loadAllData()) {
       void showMessage(
         "The teacher was saved, but the table could not be refreshed.",
         "warning"
@@ -628,7 +700,7 @@ async function addStudent(name, id, sec, pass) {
 
     await addLog(`Student added successfully: ${name}`);
 
-    if (!await loadAllData()) {
+    if (!realtimeActive && !await loadAllData()) {
       void showMessage(
         "The student was saved, but the table could not be refreshed.",
         "warning"
@@ -666,7 +738,7 @@ async function editTeacher(docId, name, id, pass) {
 
     await addLog(`Teacher updated successfully: ${name}`);
 
-    if (!await loadAllData()) {
+    if (!realtimeActive && !await loadAllData()) {
       void showMessage(
         "The teacher was updated, but the table could not be refreshed.",
         "warning"
@@ -705,7 +777,7 @@ async function editStudent(docId, name, id, sec, pass) {
 
     await addLog(`Student updated successfully: ${name}`);
 
-    if (!await loadAllData()) {
+    if (!realtimeActive && !await loadAllData()) {
       void showMessage(
         "The student was updated, but the table could not be refreshed.",
         "warning"
@@ -758,9 +830,7 @@ async function setArchived(type, docId, archived) {
         : `Record restored successfully: ${record.name}`
     );
 
-    const loaded = await loadAllData();
-
-    if (!loaded) {
+    if (!realtimeActive && !await loadAllData()) {
       void showMessage(
         "The operation completed, but the tables could not be refreshed.",
         "warning"
@@ -823,12 +893,19 @@ async function bulkToggleArchive(type, targetState) {
   if (!confirmed) return;
 
   try {
-    await Promise.all(selected.map(record =>
-      updateDoc(doc(getCollection(type), record.docId), {
-        archived: targetState,
-        updatedAt: serverTimestamp()
-      })
-    ));
+    for (let i = 0; i < selected.length; i += 500) {
+      const batch = writeBatch(db);
+      const chunk = selected.slice(i, i + 500);
+
+      chunk.forEach(record => {
+        batch.update(doc(getCollection(type), record.docId), {
+          archived: targetState,
+          updatedAt: serverTimestamp()
+        });
+      });
+
+      await batch.commit();
+    }
 
     await addLog(
       `${selected.length} ${type} record(s) ${
@@ -836,9 +913,7 @@ async function bulkToggleArchive(type, targetState) {
       } successfully.`
     );
 
-    const loaded = await loadAllData();
-
-    if (!loaded) {
+    if (!realtimeActive && !await loadAllData()) {
       void showMessage(
         "The operation completed, but the tables could not be refreshed.",
         "warning"
@@ -978,7 +1053,6 @@ function renderTable(tableId, data, type, isArchive = false) {
       tr.appendChild(statusCell);
     } else {
       const actionCell = document.createElement("td");
-
       const editButton = document.createElement("button");
 
       editButton.type = "button";
@@ -1309,7 +1383,6 @@ async function saveBatchUsers() {
         `${batchType === "teachers" ? "Teacher" : "Student"} updated successfully: ${entry.name}`
       );
     } else {
-
       for (const entry of entries) {
         const record = {
           name: entry.name,
@@ -1337,9 +1410,7 @@ async function saveBatchUsers() {
       }
     }
 
-    const loaded = await loadAllData();
-
-    if (!loaded) {
+    if (!realtimeActive && !await loadAllData()) {
       void showMessage(
         "The data was saved, but the tables could not be refreshed.",
         "warning"
@@ -1468,22 +1539,23 @@ async function login() {
   }
 
   try {
-    const loaded = await loadAllData();
+    startRealtimeListeners();
 
-    if (!loaded) return;
-
-    document.getElementById("loginPanel").classList.add("hidden");
-    document.getElementById("dashboardPanel").classList.remove("hidden");
-    document.getElementById("sidebar").classList.add("sidebar-unlocked");
+    document.getElementById("loginPanel")?.classList.add("hidden");
+    document.getElementById("dashboardPanel")?.classList.remove("hidden");
+    document.getElementById("sidebar")?.classList.add("sidebar-unlocked");
 
     updateUI();
-    passwordInput.value = "";
+
+    if (passwordInput) passwordInput.value = "";
 
     void addLog("SYSTEM: Admin logged in successfully.");
 
     console.log("Admin portal opened successfully.");
   } catch (error) {
     console.error("Login error:", error);
+
+    stopRealtimeListeners();
 
     void showMessage(
       "Unable to open the admin portal. Please try again.",
@@ -1507,14 +1579,14 @@ async function handleLogout() {
 
   if (!confirmed) return;
 
+  stopRealtimeListeners();
+
   showTab("login");
 
-  document.getElementById("dashboardPanel").classList.add("hidden");
-  document.getElementById("sidebar").classList.remove("sidebar-unlocked");
+  document.getElementById("dashboardPanel")?.classList.add("hidden");
+  document.getElementById("sidebar")?.classList.remove("sidebar-unlocked");
 
   void addLog("SYSTEM: Admin logged out successfully.");
-
-  updateUI();
 
   document.querySelectorAll(".nav-menu .nav-item[data-tab]").forEach(item => {
     item.classList.remove("active");
@@ -1522,6 +1594,13 @@ async function handleLogout() {
 
   const passwordInput = document.getElementById("adminPass");
   if (passwordInput) passwordInput.value = "";
+
+  teachers = [];
+  students = [];
+  logs = [];
+
+  updateUI();
+  renderLogs();
 }
 
 function updateClock() {
