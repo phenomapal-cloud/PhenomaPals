@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>PhenomaPals | Super Admin Suite</title>
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <link rel="stylesheet" href="phenomapals.css">
+</head>
+<body>
+
+<div class="admin-container">
+  <aside class="sidebar-pastel" id="sidebar">
+    <div class="logo-brand">
+      <div class="brain-icon"><i class="fas fa-brain"></i></div>
+      <div class="logo-text"><h2>PhenomaPals</h2><p>Super Admin Hub</p></div>
+    </div>
+    <div class="nav-menu">
+      <div class="nav-item active" data-tab="dashboard"><i class="fas fa-house"></i> Dashboard</div>
+      <div class="nav-divider">Management</div>
+      <div class="nav-item" data-tab="teachers"><i class="fas fa-chalkboard-teacher"></i> Teachers</div>
+      <div class="nav-item" data-tab="students"><i class="fas fa-user-graduate"></i> Students</div>
+      <div class="nav-item" data-tab="sections"><i class="fas fa-layer-group"></i> Sections</div>
+      <div class="nav-divider">Archives</div>
+      <div class="nav-item" data-tab="archivedTeachers"><i class="fas fa-archive"></i> Teacher Vault</div>
+      <div class="nav-item" data-tab="archivedStudents"><i class="fas fa-user-slash"></i> Student Vault</div>
+      <div class="nav-divider">System</div>
+      <div class="nav-item" data-tab="logs"><i class="fas fa-terminal"></i> Activity Logs</div>
+      <div class="nav-item logout-btn" onclick="handleLogout()"><i class="fas fa-power-off"></i> Logout</div>
+    </div>
+  </aside>
+
+  <main class="main-panel">
+    <div id="loginPanel">
+        <div class="glass-card" style="text-align: center; width: 100%; max-width: 400px; margin-bottom: 0;">
+            <h2 style="margin-bottom: 20px;">Admin Login</h2>
+            <div class="input-field">
+              <div class="password-wrapper">
+                <input type="password" id="adminPass" placeholder="Enter Password" style="text-align:center;">
+                <i class="fas fa-eye eye-icon" onclick="togglePassword('adminPass')"></i>
+              </div>
+            </div>
+            <button class="btn-soft" style="width:100%" onclick="login()">Enter Portal</button>
+        </div>
+    </div>
+
+    <div id="dashboardPanel" class="hidden">
+      <div class="dash-hero">
+          <div class="dash-logo-circle"><i class="fas fa-lightbulb"></i></div>
+          <div><h1 style="color: #23635b;">Welcome back, Admin!</h1><p>System Online: <span id="liveTime"></span></p></div>
+      </div>
+      <div class="glass-card">
+          <h3>Population Overview</h3>
+          <div style="display: flex; gap: 40px; margin-top: 20px;">
+              <div><span style="font-size: 2rem; font-weight: 800;" id="countT">0</span><br><small>Teachers</small></div>
+              <div><span style="font-size: 2rem; font-weight: 800;" id="countS">0</span><br><small>Students</small></div>
+          </div>
+      </div>
+    </div>
+
+    <div id="teachersPanel" class="hidden">
+      <div class="flex-header">
+        <h2>Active Teachers</h2>
+        <div>
+          <button class="btn-soft btn-alert" onclick="bulkToggleArchive('teacher', true)"><i class="fas fa-archive"></i> Archive Selected</button>
+          <button class="btn-soft" onclick="openBatchModal('teacher')">+ New Teacher</button>
+        </div>
+      </div>
+      <div class="glass-card">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 40px;"><input type="checkbox" id="selectAllT" class="select-box" onchange="toggleSelectAll('teacher', false)"></th>
+              <th>Name</th>
+              <th>ID</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tTable"></tbody>
+        </table>
+      </div>
+    </div>
+    
+    <div id="studentsPanel" class="hidden">
+      <div class="flex-header">
+        <h2>Enrolled Students</h2>
+        <div>
+          <button class="btn-soft btn-alert" onclick="bulkToggleArchive('student', true)"><i class="fas fa-archive"></i> Archive Selected</button>
+          <button class="btn-soft" onclick="openBatchModal('student')">+ Enroll Student</button>
+        </div>
+      </div>
+      <div class="glass-card">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 40px;"><input type="checkbox" id="selectAllS" class="select-box" onchange="toggleSelectAll('student', false)"></th>
+              <th>Name</th>
+              <th>ID</th>
+              <th>Section</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="sTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="sectionsPanel" class="hidden">
+      <div class="flex-header">
+          <h2>Section Sorter</h2>
+          <div style="display: flex; gap: 10px;">
+              <select id="sectionFilter" onchange="renderSectionTable()" style="padding: 10px; border-radius: 20px; border: 1px solid #cae3e4; font-family: inherit;">
+                  <option value="Grade 4 - A">Grade 4 - A</option>
+                  <option value="Grade 4 - B">Grade 4 - B</option>
+              </select>
+              <button class="btn-soft" style="background: #f9cf86;" onclick="exportToExcel()"><i class="fas fa-file-excel"></i> Export CSV</button>
+          </div>
+      </div>
+      <div class="glass-card">
+          <table class="data-table"><thead><tr><th>Full Name</th><th>Student ID</th><th>Section</th></tr></thead><tbody id="secTableBody"></tbody></table>
+      </div>
+    </div>
+
+    <div id="archivedTeachersPanel" class="hidden">
+      <div class="flex-header">
+        <h2>Teacher Archive</h2>
+        <button class="btn-soft btn-success" onclick="bulkToggleArchive('teacher', false)"><i class="fas fa-undo"></i> Unarchive Selected</button>
+      </div>
+      <div class="glass-card">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 40px;"><input type="checkbox" id="selectAllArchivedT" class="select-box" onchange="toggleSelectAll('teacher', true)"></th>
+              <th>Name</th>
+              <th>ID</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="atTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="archivedStudentsPanel" class="hidden">
+      <div class="flex-header">
+        <h2>Student Archive</h2>
+        <button class="btn-soft btn-success" onclick="bulkToggleArchive('student', false)"><i class="fas fa-undo"></i> Unarchive Selected</button>
+      </div>
+      <div class="glass-card">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 40px;"><input type="checkbox" id="selectAllArchivedS" class="select-box" onchange="toggleSelectAll('student', true)"></th>
+              <th>Name</th>
+              <th>ID</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="asTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="logsPanel" class="hidden">
+        <div class="flex-header"><h2>Activity Logs</h2><button class="btn-soft" onclick="clearLogs()">Clear Logs</button></div>
+        <div class="glass-card" id="logContent" style="max-height: 400px; overflow-y: auto; font-family: monospace;"></div>
+    </div>
+  </main>
+</div>
+
+<div id="batchUserModal" class="modal-overlay hidden">
+    <div class="modal-card">
+        <h3 id="batchModalTitle">Batch Register</h3>
+        <input type="hidden" id="batchType">
+        <input type="hidden" id="editRowIdx" value="-1"> 
+        <div class="modal-scroll-area">
+          <table class="data-table" id="modalInputTable">
+            <thead id="modalTableHead"></thead>
+            <tbody id="modalTableBody"></tbody>
+          </table>
+        </div>
+        
+        <div style="display:flex; justify-content: space-between; align-items:center; gap:10px;">
+            <button id="addLayerBtn" class="btn-soft" style="background: #f9cf86; color: #5c4314;" onclick="addModalInputRow()">
+              <i class="fas fa-plus"></i> Add Another Row
+            </button>
+            <div style="display:flex; gap:10px;">
+                <button class="btn-soft" style="background:#b8e0cf;" onclick="saveBatchUsers()">Save Data</button>
+                <button class="btn-soft" style="background:#f0e9df;" onclick="closeBatchModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+  <script type="module" src="phenoma.js"></script>
+</body>
+</html>
