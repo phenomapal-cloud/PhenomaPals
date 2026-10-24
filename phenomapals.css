@@ -427,6 +427,7 @@ body {
     border-collapse: collapse;
 }
 
+/* Section Sorter - Scrollable Container */
 #sectionsPanel .glass-card {
     max-height: 800px !important;
     overflow-y: auto !important;
