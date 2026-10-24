@@ -1,4 +1,3 @@
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
 
 import {
@@ -454,6 +453,7 @@ function stopRealtimeListeners() {
 
   realtimeUnsubscribers = [];
   realtimeActive = false;
+
   realtimeReady = {
     teachers: false,
     students: false,
@@ -1000,6 +1000,141 @@ function toggleSelectAll(type, isArchive = false) {
   updateSelectAllState(type, isArchive);
 }
 
+const listSearchTerms = {
+  tTable: "",
+  sTable: "",
+  atTable: "",
+  asTable: ""
+};
+
+function setupListSearch() {
+  if (document.getElementById("phenomaListSearchStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "phenomaListSearchStyles";
+  style.textContent = `
+    .phenoma-list-search {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      max-width: 360px;
+      margin: 0 0 18px auto;
+      padding: 11px 16px;
+      background: #f8fbfb;
+      border: 1px solid #d5e8e5;
+      border-radius: 24px;
+      color: #6aa69c;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .phenoma-list-search:focus-within {
+      border-color: #6aa69c;
+      box-shadow: 0 0 0 3px rgba(106, 166, 156, 0.12);
+    }
+
+    .phenoma-list-search i {
+      flex: 0 0 auto;
+      font-size: 14px;
+    }
+
+    .phenoma-list-search input {
+      width: 100%;
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: #1a3a3a;
+      font: 600 14px 'Quicksand', sans-serif;
+    }
+
+    .phenoma-list-search input::placeholder {
+      color: #88aaa6;
+      opacity: 1;
+    }
+
+    @media (max-width: 600px) {
+      .phenoma-list-search {
+        max-width: 100%;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+
+  const searchConfigs = [
+    {
+      tableId: "tTable",
+      placeholder: "Search teachers by name or ID..."
+    },
+    {
+      tableId: "sTable",
+      placeholder: "Search students by name, ID, or section..."
+    },
+    {
+      tableId: "atTable",
+      placeholder: "Search archived teachers by name or ID..."
+    },
+    {
+      tableId: "asTable",
+      placeholder: "Search archived students by name, ID, or section..."
+    }
+  ];
+
+  searchConfigs.forEach(({ tableId, placeholder }) => {
+    const tbody = document.getElementById(tableId);
+    const table = tbody?.closest("table");
+    const card = table?.closest(".glass-card");
+
+    if (
+      !tbody ||
+      !table ||
+      !card ||
+      card.querySelector(`[data-search-for="${tableId}"]`)
+    ) {
+      return;
+    }
+
+    const wrapper = document.createElement("label");
+    wrapper.className = "phenoma-list-search";
+    wrapper.dataset.searchFor = tableId;
+
+    const icon = document.createElement("i");
+    icon.className = "fas fa-search";
+    icon.setAttribute("aria-hidden", "true");
+
+    const input = document.createElement("input");
+    input.type = "search";
+    input.autocomplete = "off";
+    input.placeholder = placeholder;
+    input.setAttribute("aria-label", placeholder);
+    input.value = listSearchTerms[tableId] || "";
+
+    input.addEventListener("input", () => {
+      listSearchTerms[tableId] = input.value.trim().toLowerCase();
+
+      const renderConfigs = {
+        tTable: ["teachers", "teachers", false],
+        sTable: ["students", "students", false],
+        atTable: ["teachers", "teachers", true],
+        asTable: ["students", "students", true]
+      };
+
+      const [dataKey, type, isArchive] = renderConfigs[tableId];
+
+      renderTable(
+        tableId,
+        dataKey === "teachers" ? teachers : students,
+        type,
+        isArchive
+      );
+    });
+
+    wrapper.append(icon, input);
+    card.insertBefore(wrapper, table);
+  });
+}
+
 function renderTable(tableId, data, type, isArchive = false) {
   type = normalizeType(type);
 
@@ -1008,9 +1143,23 @@ function renderTable(tableId, data, type, isArchive = false) {
 
   tbody.replaceChildren();
 
-  const records = data.filter(item =>
-    Boolean(item.archived) === isArchive
-  );
+  const searchTerm = listSearchTerms[tableId] || "";
+
+  const records = data.filter(item => {
+    if (Boolean(item.archived) !== isArchive) return false;
+    if (!searchTerm) return true;
+
+    const searchableText = [
+      item.name,
+      item.id,
+      item.sec
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return searchableText.includes(searchTerm);
+  });
 
   records.forEach(item => {
     const tr = document.createElement("tr");
@@ -1251,7 +1400,7 @@ function addModalInputRow(name = "", id = "", sec = "", pass = "") {
     const select = document.createElement("select");
     select.className = "modal-table-input row-sec";
 
-    const sections = ["Grade 4 - A", "Grade 4 - B"];
+    const sections = ["Grade 4 - Courage", "Grade 4 - Fortitude"];
 
     sections.forEach(section => {
       const option = document.createElement("option");
@@ -1613,6 +1762,7 @@ function updateClock() {
 
 function initializePortal() {
   createPopupSystem();
+  setupListSearch();
   setupNavigation();
 
   document.getElementById("sectionFilter")
