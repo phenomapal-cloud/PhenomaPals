@@ -111,8 +111,8 @@
           <h2>Section Sorter</h2>
           <div style="display: flex; gap: 10px;">
               <select id="sectionFilter" onchange="renderSectionTable()" style="padding: 10px; border-radius: 20px; border: 1px solid #cae3e4; font-family: inherit;">
-                  <option value="Grade 4 - A">Grade 4 - A</option>
-                  <option value="Grade 4 - B">Grade 4 - B</option>
+                  <option value="Grade 4 - Courage">Grade 4 - Courage</option>
+                  <option value="Grade 4 - Fortitude">Grade 4 - Fortitude</option>
               </select>
               <button class="btn-soft" style="background: #f9cf86;" onclick="exportToExcel()"><i class="fas fa-file-excel"></i> Export CSV</button>
           </div>
@@ -164,7 +164,7 @@
 
     <div id="logsPanel" class="hidden">
         <div class="flex-header"><h2>Activity Logs</h2><button class="btn-soft" onclick="clearLogs()">Clear Logs</button></div>
-        <div class="glass-card" id="logContent" style="max-height: 400px; overflow-y: auto; font-family: monospace;"></div>
+        <div class="glass-card" id="logContent" style="max-height: 800px; overflow-y: auto; font-family: monospace;"></div>
     </div>
   </main>
 </div>
