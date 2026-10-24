@@ -407,3 +407,34 @@ body {
 .row-edit-btn i {
   font-size: 14px;
 }
+
+.glass-card:has(#tTable),
+.glass-card:has(#sTable),
+.glass-card:has(#atTable),
+.glass-card:has(#asTable) {
+    max-height: 800px;
+    overflow-y: auto;
+    overflow-x: auto;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.glass-card:has(#tTable) table,
+.glass-card:has(#sTable) table,
+.glass-card:has(#atTable) table,
+.glass-card:has(#asTable) table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#sectionsPanel .glass-card {
+    max-height: 800px !important;
+    overflow-y: auto !important;
+    overflow-x: auto !important;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+#sectionsPanel .glass-card #secTableBody {
+    width: 100%;
+}
